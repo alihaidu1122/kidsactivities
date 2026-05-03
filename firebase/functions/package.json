@@ -7,14 +7,14 @@
   },
   "scripts": {
     "lint": "eslint .",
-    "build": "tsc",
-    "build:all": "tsc",
-    "build:watch": "tsc --watch",
+    "build": "node init && tsc",
+    "build:all": "node init && tsc",
+    "build:watch": "node init && tsc --watch",
     "seed:categories": "node lib/seed.js",
     "seed:full": "node lib/seed_full.js",
     "serve": "firebase emulators:start --only functions",
     "shell": "firebase functions:shell",
-    "start": "npm run shell",
+    "start": "node init && npm run shell",
     "deploy": "firebase deploy --only functions"
   },
   "dependencies": {
@@ -30,4 +30,3 @@
     "typescript": "^5.9.2"
   }
 }
-

@@ -1,12 +1,18 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../auth/auth_providers.dart';
+import '../profile/user_profile_providers.dart';
+import '../provider/create_activity_screen.dart';
 import '../provider/provider_activities_screen.dart';
+import '../provider/provider_analytics_screen.dart';
 import '../provider/provider_inbox_screen.dart';
-import '../provider/provider_home_dashboard_screen.dart';
+import '../profile/role_profile_screen.dart';
 import '../settings/settings_screen.dart';
-import 'dashboard_scaffold.dart';
+import 'provider_dashboard_overview.dart';
+import 'widgets/dashboard_shell.dart';
+import 'widgets/dashboard_sidebar.dart';
 
 class ProviderDashboard extends ConsumerStatefulWidget {
   const ProviderDashboard({super.key});
@@ -21,92 +27,67 @@ class _ProviderDashboardState extends ConsumerState<ProviderDashboard> {
   @override
   Widget build(BuildContext context) {
     final auth = ref.read(authControllerProvider);
+    final user = ref.watch(authStateProvider).maybeWhen(data: (u) => u, orElse: () => null);
+    final db = ref.watch(firestoreProvider);
 
-    return DashboardScaffold(
-      title: 'Provider',
-      destinations: const [
-        NavigationDestination(icon: Icon(Icons.dashboard_outlined), label: 'Dashboard'),
-        NavigationDestination(icon: Icon(Icons.event_note), label: 'Listings'),
-        NavigationDestination(icon: Icon(Icons.inbox_outlined), label: 'Inquiries'),
-        NavigationDestination(icon: Icon(Icons.bar_chart_outlined), label: 'Analytics'),
-        NavigationDestination(icon: Icon(Icons.person_outline), label: 'Profile'),
-      ],
-      selectedIndex: _idx,
-      onSelect: (i) => setState(() => _idx = i),
-      body: Stack(
-        children: [
-          IndexedStack(
+    if (user == null) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: db
+          .collection('inquiries')
+          .where('providerUserId', isEqualTo: user.uid)
+          .where('status', isEqualTo: 'new')
+          .snapshots(),
+      builder: (context, newSnap) {
+        var unread = newSnap.data?.docs.length ?? 0;
+        if (newSnap.hasError) {
+          unread = 0;
+        }
+        final navItems = [
+          const DashboardNavItemData(emoji: '⊞', label: 'Dashboard'),
+          const DashboardNavItemData(emoji: '📋', label: 'My Listings'),
+          DashboardNavItemData(
+            emoji: '💬',
+            label: 'Inquiries',
+            badge: unread > 0 ? unread : null,
+          ),
+          const DashboardNavItemData(emoji: '📊', label: 'Analytics'),
+          const DashboardNavItemData(emoji: '👤', label: 'Profile'),
+        ];
+
+        return DashboardShell(
+          navItems: navItems,
+          selectedIndex: _idx,
+          onNavSelected: (i) => setState(() => _idx = i),
+          onAddListing: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CreateActivityScreen()),
+            );
+          },
+          onSettings: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            );
+          },
+          onSignOut: () async => auth.signOut(),
+          child: IndexedStack(
             index: _idx,
             children: [
-              ProviderHomeDashboardScreen(
-                onViewAllInquiries: () => setState(() => _idx = 2),
+              ProviderDashboardOverview(
+                onViewInquiries: () => setState(() => _idx = 2),
               ),
               const ProviderActivitiesScreen(),
               const ProviderInboxScreen(),
-              const _StubScreen(title: 'Basic analytics (views, inquiries)'),
-              const _StubScreen(title: 'Business profile'),
+              const ProviderAnalyticsScreen(),
+              const RoleProfileScreen(),
             ],
           ),
-          Positioned(
-            right: 16,
-            bottom: 16,
-            child: FloatingActionButton.extended(
-              onPressed: () async {
-                final navigator = Navigator.of(context);
-                final action = await showModalBottomSheet<String>(
-                  context: context,
-                  builder: (context) => SafeArea(
-                    child: Wrap(
-                      children: [
-                        ListTile(
-                          leading: const Icon(Icons.settings),
-                          title: const Text('Settings'),
-                          onTap: () => Navigator.pop(context, 'settings'),
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.logout),
-                          title: const Text('Sign out'),
-                          onTap: () => Navigator.pop(context, 'logout'),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-                if (!mounted) return;
-                if (action == 'settings') {
-                  navigator.push(
-                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                  );
-                }
-                if (action == 'logout') {
-                  await auth.signOut();
-                }
-              },
-              icon: const Icon(Icons.more_horiz),
-              label: const Text('Menu'),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
-
-class _StubScreen extends StatelessWidget {
-  const _StubScreen({required this.title});
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Text(
-          title,
-          textAlign: TextAlign.center,
-        ),
-      ),
-    );
-  }
-}
-

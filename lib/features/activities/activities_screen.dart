@@ -1,9 +1,25 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:google_fonts/google_fonts.dart';
 
+import '../../app/theme/dashboard_tokens.dart';
+import '../dashboards/parent/parent_nav.dart';
 import 'activity_providers.dart';
 import 'activity.dart';
-import 'activity_details_screen.dart';
+import 'discover_filters_panel.dart';
+import 'widgets/activity_network_image.dart';
+
+/// Max width for discover column (sidebar is separate).
+double _discoverMaxWidth(double paneWidth) {
+  if (paneWidth >= 1280) return 960;
+  if (paneWidth >= 1100) return 880;
+  if (paneWidth >= 900) return 780;
+  if (paneWidth >= parentNavBreakpoint) return math.min(paneWidth - 40, 720);
+  return paneWidth;
+}
 
 class ActivitiesScreen extends ConsumerWidget {
   const ActivitiesScreen({super.key});
@@ -11,27 +27,90 @@ class ActivitiesScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final activitiesAsync = ref.watch(activitiesFeedProvider);
-    final filters = ref.watch(activityFiltersProvider);
-    final filtersCtrl = ref.read(activityFiltersProvider.notifier);
+    final w = MediaQuery.sizeOf(context).width;
+    final isMobile = w < parentNavBreakpoint;
+    final maxW = _discoverMaxWidth(w);
+    final hPad = isMobile ? 10.0 : 12.0;
+
+    Widget constrained(Widget child) {
+      return Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: maxW),
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: hPad),
+            child: child,
+          ),
+        ),
+      );
+    }
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _FiltersBar(filters: filters, ctrl: filtersCtrl),
+        constrained(
+          DiscoverFiltersPanel(
+            compactHorizontal: isMobile,
+            densePills: !isMobile,
+          ),
+        ),
         Expanded(
-          child: activitiesAsync.when(
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (e, st) => Center(child: Text('Failed to load activities.\n$e')),
-            data: (items) {
-              if (items.isEmpty) {
-                return const Center(child: Text('No activities found.'));
-              }
-              return ListView.separated(
-                padding: const EdgeInsets.all(12),
-                itemCount: items.length,
-                separatorBuilder: (_, index) => const SizedBox(height: 8),
-                itemBuilder: (context, i) => _ActivityCard(activity: items[i]),
-              );
-            },
+          child: constrained(
+            activitiesAsync.when(
+              loading: () => Padding(
+                padding: const EdgeInsets.only(top: 48),
+                child: Center(child: CircularProgressIndicator(color: context.dash.accentBlue)),
+              ),
+              error: (e, st) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Text(
+                    'Could not load activities.\n$e',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: context.dash.textSecondary),
+                  ),
+                ),
+              ),
+              data: (items) {
+                if (items.isEmpty) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        'No activities match your filters.\nTry another city or category.',
+                        textAlign: TextAlign.center,
+                        style: GoogleFonts.dmSans(
+                          fontSize: 15,
+                          height: 1.4,
+                          color: context.dash.textMuted,
+                        ),
+                      ),
+                    ),
+                  );
+                }
+                final bottomPad = parentContentBottomPadding(context);
+
+                if (w >= 880) {
+                  return GridView.builder(
+                    padding: EdgeInsets.fromLTRB(0, 6, 0, bottomPad),
+                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: 2,
+                      mainAxisSpacing: 10,
+                      crossAxisSpacing: 10,
+                      childAspectRatio: 2.35,
+                    ),
+                    itemCount: items.length,
+                    itemBuilder: (context, i) => _ActivityFeedCard(activity: items[i], dense: true),
+                  );
+                }
+                return ListView.separated(
+                  padding: EdgeInsets.fromLTRB(0, 6, 0, bottomPad),
+                  itemCount: items.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 8),
+                  itemBuilder: (context, i) => _ActivityFeedCard(activity: items[i], dense: false),
+                );
+              },
+            ),
           ),
         ),
       ],
@@ -39,107 +118,82 @@ class ActivitiesScreen extends ConsumerWidget {
   }
 }
 
-class _FiltersBar extends ConsumerWidget {
-  const _FiltersBar({required this.filters, required this.ctrl});
-  final ActivityFilters filters;
-  final ActivityFiltersController ctrl;
+bool _hasThumb(Activity a) => a.thumbnailUrl != null && a.thumbnailUrl!.trim().isNotEmpty;
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    return Material(
-      elevation: 1,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
-        child: Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            SizedBox(
-              width: 180,
-              child: DropdownButtonFormField<String>(
-                initialValue: filters.city,
-                decoration: const InputDecoration(labelText: 'City'),
-                items: const [
-                  DropdownMenuItem(value: null, child: Text('Any')),
-                  DropdownMenuItem(value: 'Tallinn', child: Text('Tallinn')),
-                  DropdownMenuItem(value: 'Tartu', child: Text('Tartu')),
-                  DropdownMenuItem(value: 'Pärnu', child: Text('Pärnu')),
-                  DropdownMenuItem(value: 'Other', child: Text('Other')),
-                ],
-                onChanged: (v) => ctrl.setCity(v),
-              ),
-            ),
-            SizedBox(
-              width: 240,
-              child: TextField(
-                decoration: const InputDecoration(
-                  labelText: 'Category (exact for now)',
-                  hintText: 'e.g. 🏊 Swimming',
-                ),
-                onSubmitted: (v) => ctrl.setCategory(v.trim().isEmpty ? null : v.trim()),
-              ),
-            ),
-            SizedBox(
-              width: 140,
-              child: TextField(
-                decoration: const InputDecoration(labelText: 'Min age'),
-                keyboardType: TextInputType.number,
-                onSubmitted: (v) {
-                  final n = int.tryParse(v.trim());
-                  ctrl.setMinAge(n);
-                },
-              ),
-            ),
-            TextButton(
-              onPressed: () => ctrl.clear(),
-              child: const Text('Clear'),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+class _ActivityFeedCard extends StatelessWidget {
+  const _ActivityFeedCard({required this.activity, required this.dense});
 
-class _ActivityCard extends StatelessWidget {
-  const _ActivityCard({required this.activity});
   final Activity activity;
+  final bool dense;
 
   @override
   Widget build(BuildContext context) {
-    return Card(
+    final d = context.dash;
+    final pad = dense ? 10.0 : 11.0;
+
+    return Material(
+      color: d.bgSecondary,
+      elevation: 0,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: d.borderColor),
+      ),
       clipBehavior: Clip.antiAlias,
       child: InkWell(
-        onTap: () {
-          Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => ActivityDetailsScreen(activity: activity)),
-          );
-        },
+        onTap: () => context.push('/parent/discover/activity/${activity.id}'),
         child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Column(
+          padding: EdgeInsets.all(pad),
+          child: Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(
-                activity.title.isEmpty ? '(Untitled)' : activity.title,
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 4),
-              Wrap(
-                spacing: 8,
-                runSpacing: 6,
-                children: [
-                  _Chip(text: activity.city),
-                  _Chip(text: activity.category),
-                  _Chip(text: '${activity.ageRangeMin}-${activity.ageRangeMax} yrs'),
-                  if (activity.priceAmount != null) _Chip(text: '€${activity.priceAmount}'),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                activity.providerBusinessName ?? '',
-                style: Theme.of(context).textTheme.bodySmall,
+              _ActivityListThumb(activity: activity, d: d, size: dense ? 56 : 60),
+              SizedBox(width: dense ? 10 : 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      activity.title.isEmpty ? '(Untitled)' : activity.title,
+                      style: GoogleFonts.dmSans(
+                        fontSize: dense ? 14 : 14.5,
+                        fontWeight: FontWeight.w600,
+                        height: 1.25,
+                        color: d.textPrimary,
+                      ),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    if ((activity.providerBusinessName ?? '').trim().isNotEmpty) ...[
+                      const SizedBox(height: 3),
+                      Text(
+                        activity.providerBusinessName!.trim(),
+                        style: GoogleFonts.dmSans(fontSize: 11.5, color: d.textMuted),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 5,
+                      runSpacing: 5,
+                      children: [
+                        _ActivityListMetaChip(icon: Icons.place_outlined, text: activity.city, d: d),
+                        _ActivityListMetaChip(icon: Icons.category_outlined, text: activity.category, d: d),
+                        _ActivityListMetaChip(
+                          icon: Icons.cake_outlined,
+                          text: '${activity.ageRangeMin}–${activity.ageRangeMax} yrs',
+                          d: d,
+                        ),
+                        if (activity.priceAmount != null)
+                          _ActivityListMetaChip(
+                            icon: Icons.euro_symbol,
+                            text: '${activity.priceAmount}',
+                            d: d,
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -149,22 +203,73 @@ class _ActivityCard extends StatelessWidget {
   }
 }
 
-class _Chip extends StatelessWidget {
-  const _Chip({required this.text});
-  final String text;
+class _ActivityListThumb extends StatelessWidget {
+  const _ActivityListThumb({required this.activity, required this.d, required this.size});
+
+  final Activity activity;
+  final DashboardTokens d;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    if (_hasThumb(activity)) {
+      return ActivityNetworkImage(
+        url: activity.thumbnailUrl!,
+        width: size,
+        height: size,
+        fit: BoxFit.cover,
+        borderRadius: BorderRadius.circular(8),
+      );
+    }
+    return Container(
+      width: size,
+      height: size,
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surfaceContainerHighest,
-        borderRadius: BorderRadius.circular(999),
+        color: d.bgTertiary,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: d.borderColor.withValues(alpha: 0.65)),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-        child: Text(text, style: Theme.of(context).textTheme.labelMedium),
-      ),
+      alignment: Alignment.center,
+      child: Icon(Icons.interests_outlined, size: size * 0.42, color: d.textMuted.withValues(alpha: 0.85)),
     );
   }
 }
 
+class _ActivityListMetaChip extends StatelessWidget {
+  const _ActivityListMetaChip({
+    required this.icon,
+    required this.text,
+    required this.d,
+  });
+
+  final IconData icon;
+  final String text;
+  final DashboardTokens d;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+      decoration: BoxDecoration(
+        color: d.bgTertiary.withValues(alpha: 0.85),
+        borderRadius: BorderRadius.circular(6),
+        border: Border.all(color: d.borderColor.withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: d.textMuted),
+          const SizedBox(width: 3),
+          Text(
+            text,
+            style: GoogleFonts.dmSans(
+              fontSize: 10.5,
+              fontWeight: FontWeight.w500,
+              color: d.textMuted,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
