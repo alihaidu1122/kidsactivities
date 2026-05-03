@@ -1,0 +1,36 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    function isAuth() { return request.auth != null; }
+    function isOwner(uid) { return isAuth() && request.auth.uid == uid; }
+    function getRole() {
+      return firestore.get(/databases/(default)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isAdmin() { return isAuth() && getRole() == 'admin'; }
+    function isProvider() { return isAuth() && getRole() == 'provider'; }
+    function isImage() { return request.resource.contentType.matches('image/.*'); }
+    function max5MB() { return request.resource.size < 5 * 1024 * 1024; }
+    function activityOwnedByCaller(activityId) {
+      return firestore.get(/databases/(default)/documents/activities/$(activityId)).data.providerUserId == request.auth.uid;
+    }
+
+    // /users/{userId}/profile/** (private)
+    match /users/{userId}/profile/{allPaths=**} {
+      allow read: if isOwner(userId) || isAdmin();
+      allow write: if (isOwner(userId) || isAdmin()) && isImage() && max5MB();
+    }
+
+    // /logos/{userId}/** (public read, owner write)
+    match /logos/{userId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if (isOwner(userId) || isAdmin()) && isImage() && max5MB();
+    }
+
+    // /activities/{activityId}/** (public read, provider owner write)
+    match /activities/{activityId}/{allPaths=**} {
+      allow read: if true;
+      allow write: if isAdmin() || (isProvider() && isAuth() && activityOwnedByCaller(activityId));
+    }
+  }
+}
+

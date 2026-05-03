@@ -1,0 +1,83 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isAuth() { return request.auth != null; }
+    function isOwner(uid) { return isAuth() && request.auth.uid == uid; }
+    function getRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    function isAdmin() { return isAuth() && getRole() == 'admin'; }
+    function isProvider() { return isAuth() && getRole() == 'provider'; }
+    function isParent() { return isAuth() && getRole() == 'parent'; }
+
+    match /users/{uid} {
+      // Owner only or admin. Never allow reading other users.
+      allow read: if isOwner(uid) || isAdmin();
+
+      // Auth user can create their own document only.
+      allow create: if isOwner(uid)
+        && request.resource.data.userId == uid
+        && request.resource.data.email == request.auth.token.email;
+
+      // Owner can update own profile; admin can update anything.
+      allow update: if isOwner(uid) || isAdmin();
+
+      // Admin only deletion (per spec).
+      allow delete: if isAdmin();
+
+      match /children/{childId} {
+        allow read, write: if isOwner(uid) || isAdmin();
+      }
+    }
+
+    match /activities/{activityId} {
+      // Public browsing: only active + approved.
+      allow read: if (resource.data.isActive == true && resource.data.approvalStatus == 'approved')
+        || (isProvider() && resource.data.providerUserId == request.auth.uid)
+        || isAdmin();
+
+      allow create: if isProvider()
+        && request.resource.data.providerUserId == request.auth.uid
+        && request.resource.data.approvalStatus == 'pending';
+
+      // Provider cannot self-approve/reject; admin can.
+      allow update: if isAdmin()
+        || (isProvider()
+          && resource.data.providerUserId == request.auth.uid
+          && request.resource.data.approvalStatus == resource.data.approvalStatus);
+
+      allow delete: if (isProvider() && resource.data.providerUserId == request.auth.uid) || isAdmin();
+    }
+
+    match /categories/{categoryId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+
+    match /inquiries/{inquiryId} {
+      allow read: if isAdmin()
+        || (isAuth() && resource.data.parentUserId == request.auth.uid)
+        || (isAuth() && resource.data.providerUserId == request.auth.uid);
+
+      allow create: if isParent() && request.resource.data.parentUserId == request.auth.uid;
+
+      allow update: if isAdmin()
+        || (isProvider() && resource.data.providerUserId == request.auth.uid);
+
+      allow delete: if isAdmin();
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if resource.data.isApproved == true || isAdmin();
+
+      allow create: if isParent()
+        && request.resource.data.parentUserId == request.auth.uid
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5;
+
+      allow update, delete: if isAdmin()
+        || (isAuth() && resource.data.parentUserId == request.auth.uid);
+    }
+  }
+}
+

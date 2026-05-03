@@ -1,0 +1,142 @@
+{
+  "project_info": {
+    "project_number": "787890442501",
+    "project_id": "kidsactivities-389e1",
+    "storage_bucket": "kidsactivities-389e1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:787890442501:android:02873b94efef800325676c",
+        "android_client_info": {
+          "package_name": "com.activities.dashboard"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "787890442501-uaobhcdh8nbkmqpvqap1fhsb2luqhah4.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.activities.dashboard",
+            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
+          }
+        },
+        {
+          "client_id": "787890442501-jmsuqhhs9imp0vj7kg2u6th5fetoe13e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBjHp2dFJPTam1f2fU39AL37FFPnhBaW5k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "787890442501-jmsuqhhs9imp0vj7kg2u6th5fetoe13e.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "787890442501-2bjvbnet0meubl3v4qkmp16ki4997ngl.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.migambi.migadmin"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:787890442501:android:5a0bc6ada3b2b34125676c",
+        "android_client_info": {
+          "package_name": "com.kids.algo"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "787890442501-ajbavljqrnua40adf9rpddf4knkl5l5l.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.kids.algo",
+            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
+          }
+        },
+        {
+          "client_id": "787890442501-jmsuqhhs9imp0vj7kg2u6th5fetoe13e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBjHp2dFJPTam1f2fU39AL37FFPnhBaW5k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "787890442501-jmsuqhhs9imp0vj7kg2u6th5fetoe13e.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "787890442501-2bjvbnet0meubl3v4qkmp16ki4997ngl.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.migambi.migadmin"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:787890442501:android:58a9dee2da68541e25676c",
+        "android_client_info": {
+          "package_name": "com.migambi.migadmin"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "787890442501-gc2vlmph5r1j3aod49ltlg2aves70gus.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.migambi.migadmin",
+            "certificate_hash": "9bbb3186b2189ef16d8f272bdab59362c395cbb4"
+          }
+        },
+        {
+          "client_id": "787890442501-jmsuqhhs9imp0vj7kg2u6th5fetoe13e.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBjHp2dFJPTam1f2fU39AL37FFPnhBaW5k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "787890442501-jmsuqhhs9imp0vj7kg2u6th5fetoe13e.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "787890442501-2bjvbnet0meubl3v4qkmp16ki4997ngl.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.migambi.migadmin"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
