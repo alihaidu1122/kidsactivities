@@ -24,6 +24,16 @@ final userDocProvider = StreamProvider<DocumentSnapshot<Map<String, dynamic>>?>(
 final userRoleProvider = Provider<AsyncValue<UserRole>>((ref) {
   final tokenRole = ref.watch(idTokenRoleProvider);
   final userDoc = ref.watch(userDocProvider);
+  final user = ref.watch(authStateProvider).valueOrNull;
+
+  // Signed-out: don't combine with Firestore stream (empty stream would stall loading).
+  if (user == null) {
+    return tokenRole.when(
+      data: (_) => const AsyncValue.data(UserRole.unknown),
+      loading: () => const AsyncValue.loading(),
+      error: AsyncValue.error,
+    );
+  }
 
   // Prefer custom claim. If missing, fall back to Firestore field for UI.
   return tokenRole.when(
@@ -31,8 +41,16 @@ final userRoleProvider = Provider<AsyncValue<UserRole>>((ref) {
       if (role != UserRole.unknown) return AsyncValue.data(role);
       return userDoc.when(
         data: (snap) {
-          final roleStr = snap?.data()?['role'] as String?;
-          return AsyncValue.data(UserRole.fromString(roleStr));
+          // First snapshots can be !exists before merge/create; avoid flashing "no role".
+          if (snap == null || !snap.exists) {
+            return const AsyncValue.loading();
+          }
+          final roleStr = snap.data()?['role'] as String?;
+          final trimmed = roleStr?.trim();
+          if (trimmed == null || trimmed.isEmpty) {
+            return const AsyncValue.data(UserRole.parent);
+          }
+          return AsyncValue.data(UserRole.fromString(trimmed));
         },
         loading: () => const AsyncValue.loading(),
         error: AsyncValue.error,

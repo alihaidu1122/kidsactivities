@@ -10,6 +10,7 @@ class Review {
     required this.rating,
     required this.reviewText,
     required this.isApproved,
+    required this.isFlagged,
     required this.createdAt,
   });
 
@@ -21,6 +22,7 @@ class Review {
   final int rating;
   final String? reviewText;
   final bool isApproved;
+  final bool isFlagged;
   final DateTime? createdAt;
 
   static Review fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
@@ -34,6 +36,7 @@ class Review {
       rating: (d['rating'] as num?)?.toInt() ?? 0,
       reviewText: d['reviewText'] as String?,
       isApproved: (d['isApproved'] as bool?) ?? true,
+      isFlagged: (d['isFlagged'] as bool?) ?? false,
       createdAt: (d['createdAt'] as Timestamp?)?.toDate(),
     );
   }

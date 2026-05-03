@@ -1,12 +1,21 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../auth/auth_providers.dart';
-import '../admin/admin_activity_moderation_screen.dart';
+import '../admin/admin_analytics_screen.dart';
 import '../admin/admin_categories_screen.dart';
-import '../admin/admin_tools_screen.dart';
+import '../admin/admin_inquiries_screen.dart';
+import '../admin/admin_listings_manage_screen.dart';
+import '../admin/admin_reviews_moderation_screen.dart';
+import '../admin/admin_users_screen.dart';
+import '../auth/auth_providers.dart';
+import '../provider/create_activity_screen.dart';
+import '../profile/role_profile_screen.dart';
+import '../profile/user_profile_providers.dart';
 import '../settings/settings_screen.dart';
-import 'dashboard_scaffold.dart';
+import 'admin_dashboard_overview.dart';
+import 'widgets/dashboard_shell.dart';
+import 'widgets/dashboard_sidebar.dart';
 
 class AdminDashboard extends ConsumerStatefulWidget {
   const AdminDashboard({super.key});
@@ -17,92 +26,74 @@ class AdminDashboard extends ConsumerStatefulWidget {
 
 class _AdminDashboardState extends ConsumerState<AdminDashboard> {
   int _idx = 0;
+  String _listingsFilter = 'all';
 
   @override
   Widget build(BuildContext context) {
     final auth = ref.read(authControllerProvider);
+    final db = ref.watch(firestoreProvider);
 
-    return DashboardScaffold(
-      title: 'Admin',
-      destinations: const [
-        NavigationDestination(icon: Icon(Icons.group_outlined), label: 'Users'),
-        NavigationDestination(icon: Icon(Icons.event_available_outlined), label: 'Activities'),
-        NavigationDestination(icon: Icon(Icons.category_outlined), label: 'Categories'),
-        NavigationDestination(icon: Icon(Icons.reviews_outlined), label: 'Reviews'),
-      ],
-      selectedIndex: _idx,
-      onSelect: (i) => setState(() => _idx = i),
-      body: Stack(
-        children: [
-          IndexedStack(
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: db.collection('activities').where('approvalStatus', isEqualTo: 'pending').snapshots(),
+      builder: (context, pendSnap) {
+        final pendingCount = pendSnap.data?.docs.length ?? 0;
+        final navItems = [
+          const DashboardNavItemData(emoji: '⊞', label: 'Dashboard'),
+          DashboardNavItemData(
+            emoji: '📋',
+            label: 'Listings',
+            badge: pendingCount > 0 ? pendingCount : null,
+          ),
+          const DashboardNavItemData(emoji: '👥', label: 'Users', trailingArrow: true),
+          const DashboardNavItemData(emoji: '💬', label: 'Inquiries'),
+          const DashboardNavItemData(emoji: '⭐', label: 'Reviews'),
+          const DashboardNavItemData(emoji: '🏷️', label: 'Categories'),
+          const DashboardNavItemData(emoji: '📊', label: 'Analytics'),
+          const DashboardNavItemData(emoji: '👤', label: 'Profile'),
+        ];
+
+        return DashboardShell(
+          navItems: navItems,
+          selectedIndex: _idx,
+          onNavSelected: (i) => setState(() => _idx = i),
+          onAddListing: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const CreateActivityScreen()),
+            );
+          },
+          onSettings: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(builder: (_) => const SettingsScreen()),
+            );
+          },
+          onSignOut: () async => auth.signOut(),
+          child: IndexedStack(
             index: _idx,
-            children: const [
-              AdminToolsScreen(),
-              AdminActivityModerationScreen(),
-              AdminCategoriesScreen(),
-              _StubScreen(title: 'Moderate reviews (approve/flag/delete)'),
+            children: [
+              AdminDashboardOverview(
+                onViewPendingListings: () => setState(() {
+                  _listingsFilter = 'pending';
+                  _idx = 1;
+                }),
+                onViewAllListings: () => setState(() {
+                  _listingsFilter = 'all';
+                  _idx = 1;
+                }),
+              ),
+              AdminListingsManageScreen(
+                key: ValueKey(_listingsFilter),
+                initialFilter: _listingsFilter,
+              ),
+              const AdminUsersScreen(),
+              const AdminInquiriesScreen(),
+              const AdminReviewsModerationScreen(),
+              const AdminCategoriesScreen(),
+              const AdminAnalyticsScreen(),
+              const RoleProfileScreen(),
             ],
           ),
-          Positioned(
-            right: 16,
-            bottom: 16,
-            child: FloatingActionButton.extended(
-              onPressed: () async {
-                final navigator = Navigator.of(context);
-                final action = await showModalBottomSheet<String>(
-                  context: context,
-                  builder: (context) => SafeArea(
-                    child: Wrap(
-                      children: [
-                        ListTile(
-                          leading: const Icon(Icons.settings),
-                          title: const Text('Settings'),
-                          onTap: () => Navigator.pop(context, 'settings'),
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.logout),
-                          title: const Text('Sign out'),
-                          onTap: () => Navigator.pop(context, 'logout'),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-                if (!mounted) return;
-                if (action == 'settings') {
-                  navigator.push(
-                    MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                  );
-                }
-                if (action == 'logout') {
-                  await auth.signOut();
-                }
-              },
-              icon: const Icon(Icons.more_horiz),
-              label: const Text('Menu'),
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
-
-class _StubScreen extends StatelessWidget {
-  const _StubScreen({required this.title});
-  final String title;
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Text(
-          title,
-          textAlign: TextAlign.center,
-        ),
-      ),
-    );
-  }
-}
-

@@ -1,8 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../auth/auth_providers.dart';
+import '../auth/widgets/auth_brand_mark.dart';
 import '../categories/categories_providers.dart';
 import '../profile/user_profile_providers.dart';
 
@@ -87,7 +89,7 @@ class _ParentOnboardingScreenState extends ConsumerState<ParentOnboardingScreen>
       }
 
       if (!mounted) return;
-      Navigator.of(context).pop();
+      context.go('/');
     } on Exception catch (e) {
       messenger.showSnackBar(SnackBar(content: Text(_friendlyError(e))));
     } finally {
@@ -174,9 +176,13 @@ class _ParentOnboardingScreenState extends ConsumerState<ParentOnboardingScreen>
                     child: ListView(
                       children: [
                         if (!isWide) ...[
-                          Text('KiddoMarket', style: Theme.of(context).textTheme.headlineMedium?.copyWith(color: scheme.primary, fontWeight: FontWeight.w900)),
-                          const SizedBox(height: 4),
-                          Text('Create your parent account', style: Theme.of(context).textTheme.bodyMedium),
+                          const Center(child: AuthBrandMark(compact: true)),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Create your parent account',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                            textAlign: TextAlign.center,
+                          ),
                           const SizedBox(height: 20),
                         ],
                         const _ProgressBar(activeSegments: 2, total: 4),
@@ -280,7 +286,7 @@ class _ParentOnboardingScreenState extends ConsumerState<ParentOnboardingScreen>
                                 children: [
                                   Text('Already have an account? ', style: Theme.of(context).textTheme.bodySmall),
                                   TextButton(
-                                    onPressed: _loading ? null : () => Navigator.of(context).pop(),
+                                    onPressed: _loading ? null : () => context.go('/sign-in/parent'),
                                     child: const Text('Log in here'),
                                   ),
                                 ],
