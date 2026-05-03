@@ -1,5 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'activity_media.dart';
+
 class Activity {
   Activity({
     required this.id,
@@ -18,6 +20,8 @@ class Activity {
     required this.providerBusinessName,
     required this.viewCount,
     required this.inquiryCount,
+    required this.thumbnailUrl,
+    required this.photoUrls,
   });
 
   final String id;
@@ -36,9 +40,18 @@ class Activity {
   final String? providerBusinessName;
   final int viewCount;
   final int inquiryCount;
+  /// Cover image for lists and cards (Firebase Storage download URL).
+  final String? thumbnailUrl;
+  /// Gallery image URLs (may overlap with thumbnail).
+  final List<String> photoUrls;
 
   static Activity fromDoc(DocumentSnapshot<Map<String, dynamic>> doc) {
     final d = doc.data() ?? const <String, dynamic>{};
+    final photos = parsePhotoUrlList(
+      d['photos'] ?? d['photoUrls'] ?? d['images'] ?? d['imageUrls'],
+    );
+    final thumb = pickThumbnailUrl(d, photos);
+
     return Activity(
       id: doc.id,
       providerUserId: (d['providerUserId'] as String?) ?? '',
@@ -56,6 +69,8 @@ class Activity {
       providerBusinessName: d['providerBusinessName'] as String?,
       viewCount: (d['viewCount'] as num?)?.toInt() ?? 0,
       inquiryCount: (d['inquiryCount'] as num?)?.toInt() ?? 0,
+      thumbnailUrl: thumb,
+      photoUrls: photos,
     );
   }
 }

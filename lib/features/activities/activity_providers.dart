@@ -43,11 +43,51 @@ class ActivityFiltersController extends Notifier<ActivityFilters> {
   @override
   ActivityFilters build() => const ActivityFilters();
 
-  void setCity(String? city) => state = state.copyWith(city: city);
-  void setCategory(String? category) => state = state.copyWith(category: category);
-  void setMinAge(int? minAge) => state = state.copyWith(minAge: minAge);
+  void setCity(String? city) => state = ActivityFilters(
+        city: city,
+        category: state.category,
+        minAge: state.minAge,
+        maxPrice: state.maxPrice,
+        query: state.query,
+      );
+
+  void setCategory(String? category) => state = ActivityFilters(
+        city: state.city,
+        category: category,
+        minAge: state.minAge,
+        maxPrice: state.maxPrice,
+        query: state.query,
+      );
+
+  void setMinAge(int? minAge) => state = ActivityFilters(
+        city: state.city,
+        category: state.category,
+        minAge: minAge,
+        maxPrice: state.maxPrice,
+        query: state.query,
+      );
+  void setSearchQuery(String? q) {
+    final t = q?.trim();
+    state = ActivityFilters(
+      city: state.city,
+      category: state.category,
+      minAge: state.minAge,
+      maxPrice: state.maxPrice,
+      query: t == null || t.isEmpty ? null : t,
+    );
+  }
+
   void clear() => state = const ActivityFilters();
 }
+
+/// Single activity document (e.g. deep link from discover).
+final activityByIdProvider = StreamProvider.autoDispose.family<Activity?, String>((ref, id) {
+  final db = ref.watch(firestoreProvider);
+  return db.collection('activities').doc(id).snapshots().map((s) {
+    if (!s.exists) return null;
+    return Activity.fromDoc(s);
+  });
+});
 
 final activitiesFeedProvider = StreamProvider<List<Activity>>((ref) {
   final db = ref.watch(firestoreProvider);
@@ -67,6 +107,20 @@ final activitiesFeedProvider = StreamProvider<List<Activity>>((ref) {
   // Basic ordering.
   q = q.orderBy('updatedAt', descending: true);
 
-  return q.snapshots().map((snap) => snap.docs.map(Activity.fromDoc).toList());
+  return q.snapshots().map((snap) {
+    var list = snap.docs.map(Activity.fromDoc).toList();
+    final search = f.query?.trim().toLowerCase();
+    if (search != null && search.isNotEmpty) {
+      list = list
+          .where(
+            (a) =>
+                a.title.toLowerCase().contains(search) ||
+                a.category.toLowerCase().contains(search) ||
+                (a.providerBusinessName ?? '').toLowerCase().contains(search),
+          )
+          .toList();
+    }
+    return list;
+  });
 });
 

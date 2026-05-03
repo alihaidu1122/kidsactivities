@@ -31,6 +31,12 @@ service firebase.storage {
       allow read: if true;
       allow write: if isAdmin() || (isProvider() && isAuth() && activityOwnedByCaller(activityId));
     }
+
+    // Parent profile photos (public read so Image.network works on web; auth writes only)
+    match /profile_photos/{fileName} {
+      allow read: if true;
+      allow write: if isAuth() && isImage() && max5MB();
+    }
   }
 }
 

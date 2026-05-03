@@ -117,49 +117,78 @@ class _HeaderBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final segmented = SegmentedButton<String>(
+      segments: const [
+        ButtonSegment(value: 'all', label: Text('All')),
+        ButtonSegment(value: 'new', label: Text('New')),
+        ButtonSegment(value: 'responded', label: Text('Responded')),
+        ButtonSegment(value: 'closed', label: Text('Closed')),
+      ],
+      selected: {filter},
+      onSelectionChanged: (s) => onFilter(s.first),
+    );
+
     return Card(
       elevation: 0,
       child: Padding(
         padding: const EdgeInsets.all(16),
-        child: Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+        child: LayoutBuilder(
+          builder: (context, c) {
+            final wide = c.maxWidth >= 720;
+            final titleBlock = Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Inquiry Inbox', style: Theme.of(context).textTheme.headlineSmall),
+                const SizedBox(height: 4),
+                Text(
+                  'Manage questions and booking requests from parents.',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            );
+            final searchField = TextField(
+              decoration: const InputDecoration(
+                prefixIcon: Icon(Icons.search),
+                labelText: 'Search inquiries',
+              ),
+              onChanged: onSearch,
+            );
+
+            if (wide) {
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text('Inquiry Inbox', style: Theme.of(context).textTheme.headlineSmall),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Manage questions and booking requests from parents.',
-                    style: Theme.of(context).textTheme.bodyMedium,
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(child: titleBlock),
+                      const SizedBox(width: 16),
+                      SizedBox(width: 280, child: searchField),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: segmented,
                   ),
                 ],
-              ),
-            ),
-            SizedBox(
-              width: 320,
-              child: TextField(
-                decoration: const InputDecoration(
-                  prefixIcon: Icon(Icons.search),
-                  labelText: 'Search inquiries',
+              );
+            }
+
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                titleBlock,
+                const SizedBox(height: 12),
+                searchField,
+                const SizedBox(height: 12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: segmented,
                 ),
-                onChanged: onSearch,
-              ),
-            ),
-            SegmentedButton<String>(
-              segments: const [
-                ButtonSegment(value: 'all', label: Text('All')),
-                ButtonSegment(value: 'new', label: Text('New')),
-                ButtonSegment(value: 'responded', label: Text('Responded')),
-                ButtonSegment(value: 'closed', label: Text('Closed')),
               ],
-              selected: {filter},
-              onSelectionChanged: (s) => onFilter(s.first),
-            ),
-          ],
+            );
+          },
         ),
       ),
     );
@@ -306,69 +335,74 @@ class _InboxTile extends StatelessWidget {
         .map((p) => p[0].toUpperCase())
         .join();
 
-    return InkWell(
-      onTap: onTap,
+    return Material(
+      color: Colors.transparent,
       borderRadius: BorderRadius.circular(16),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: bg,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: border),
-          boxShadow: selected
-              ? [BoxShadow(color: scheme.primary.withValues(alpha: 0.10), blurRadius: 18, offset: const Offset(0, 6))]
-              : null,
-        ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              CircleAvatar(
-                radius: 24,
-                backgroundColor: scheme.primaryContainer,
-                child: Text(initials, style: TextStyle(color: scheme.onPrimaryContainer, fontWeight: FontWeight.w700)),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            inquiry.parentName.isEmpty ? '(No name)' : inquiry.parentName,
-                            style: Theme.of(context).textTheme.titleSmall,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        Text(
-                          _relativeTime(inquiry.createdAt),
-                          style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.primary),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 6,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        _Tag(text: tag.$1, bg: tag.$2, fg: tag.$3),
-                        if (inquiry.childAge != null) _Meta(text: 'Child: ${inquiry.childAge} yrs'),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      inquiry.message,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
-                    ),
-                  ],
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: bg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: border),
+            boxShadow: selected
+                ? [BoxShadow(color: scheme.primary.withValues(alpha: 0.10), blurRadius: 18, offset: const Offset(0, 6))]
+                : null,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: scheme.primaryContainer,
+                  child: Text(initials, style: TextStyle(color: scheme.onPrimaryContainer, fontWeight: FontWeight.w700)),
                 ),
-              ),
-            ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              inquiry.parentName.isEmpty ? '(No name)' : inquiry.parentName,
+                              style: Theme.of(context).textTheme.titleSmall,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          Text(
+                            _relativeTime(inquiry.createdAt),
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.primary),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 6,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          _Tag(text: tag.$1, bg: tag.$2, fg: tag.$3),
+                          if (inquiry.childAge != null) _Meta(text: 'Child: ${inquiry.childAge} yrs'),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        inquiry.message,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),

@@ -1,6 +1,8 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../auth/auth_providers.dart';
 import '../categories/categories_providers.dart';
@@ -28,6 +30,11 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
   String _scheduleDetails = '';
   int _step = 0;
   bool _saving = false;
+  XFile? _thumbnailFile;
+  final List<XFile> _galleryFiles = [];
+
+  static const int _maxGalleryPhotos = 8;
+  final ImagePicker _imagePicker = ImagePicker();
 
   @override
   void dispose() {
@@ -44,6 +51,23 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
     return true;
   }
 
+  Future<void> _pickThumbnail() async {
+    final x = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      maxWidth: 2048,
+      imageQuality: 88,
+    );
+    if (x != null && mounted) setState(() => _thumbnailFile = x);
+  }
+
+  Future<void> _pickGalleryPhotos() async {
+    final remain = _maxGalleryPhotos - _galleryFiles.length;
+    if (remain <= 0) return;
+    final imgs = await _imagePicker.pickMultiImage(maxWidth: 2048, imageQuality: 88);
+    if (imgs.isEmpty || !mounted) return;
+    setState(() => _galleryFiles.addAll(imgs.take(remain)));
+  }
+
   Future<void> _save({required bool asDraft}) async {
     final user = ref.read(authStateProvider).valueOrNull;
     final db = ref.read(firestoreProvider);
@@ -51,10 +75,14 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
 
     setState(() => _saving = true);
     final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
     try {
       final refDoc = db.collection('activities').doc();
-      await refDoc.set({
-        'activityId': refDoc.id,
+      final id = refDoc.id;
+      final storage = FirebaseStorage.instance;
+
+      final initialData = {
+        'activityId': id,
         'providerUserId': user.uid,
         'providerBusinessName': null,
         'title': _titleCtrl.text.trim(),
@@ -75,6 +103,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
         'startDate': null,
         'endDate': null,
         'photos': <String>[],
+        'thumbnailUrl': null,
         'videoUrl': null,
         'languages': <String>['Estonian', 'English', 'Russian'],
         'maxParticipants': null,
@@ -85,9 +114,49 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
         'rejectionReason': null,
         'viewCount': 0,
         'inquiryCount': 0,
-      });
+      };
+
+      // Document must exist before Storage uploads (storage.rules: activityOwnedByCaller).
+      await refDoc.set(initialData);
+
+      final photoUrls = <String>[];
+      String? thumbnailUrl;
+
+      if (_thumbnailFile != null) {
+        final bytes = await _thumbnailFile!.readAsBytes();
+        final ext = _imageExt(_thumbnailFile!.name);
+        final sr = storage.ref('activities/$id/thumbnail$ext');
+        await sr.putData(bytes, SettableMetadata(contentType: _imageContentType(ext)));
+        thumbnailUrl = await sr.getDownloadURL();
+      }
+
+      for (var i = 0; i < _galleryFiles.length; i++) {
+        final file = _galleryFiles[i];
+        final bytes = await file.readAsBytes();
+        final ext = _imageExt(file.name);
+        final sr = storage.ref('activities/$id/photos/$i$ext');
+        await sr.putData(bytes, SettableMetadata(contentType: _imageContentType(ext)));
+        photoUrls.add(await sr.getDownloadURL());
+      }
+
+      if (thumbnailUrl == null && photoUrls.isNotEmpty) {
+        thumbnailUrl = photoUrls.first;
+      }
+
+      await refDoc.set(
+        {
+          'photos': photoUrls,
+          'thumbnailUrl': thumbnailUrl,
+          'updatedAt': FieldValue.serverTimestamp(),
+        },
+        SetOptions(merge: true),
+      );
       if (!mounted) return;
       navigator.pop();
+    } on FirebaseException catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text('Could not save listing: ${e.message}')));
+    } catch (e) {
+      if (mounted) messenger.showSnackBar(SnackBar(content: Text('Could not save listing: $e')));
     } finally {
       if (mounted) setState(() => _saving = false);
     }
@@ -161,6 +230,12 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
                                   _MediaStep(
                                     scheduleDetails: _scheduleDetails,
                                     onScheduleDetails: (v) => setState(() => _scheduleDetails = v),
+                                    thumbnailFile: _thumbnailFile,
+                                    galleryFiles: _galleryFiles,
+                                    onPickThumbnail: _pickThumbnail,
+                                    onClearThumbnail: () => setState(() => _thumbnailFile = null),
+                                    onAddGalleryPhotos: _pickGalleryPhotos,
+                                    onRemoveGalleryPhoto: (i) => setState(() => _galleryFiles.removeAt(i)),
                                   ),
                                 ],
                                 const SizedBox(height: 16),
@@ -216,6 +291,7 @@ class _CreateActivityScreenState extends ConsumerState<CreateActivityScreen> {
                           category: _category,
                           title: _titleCtrl.text,
                           scheduleDetails: _scheduleDetails,
+                          thumbnailFile: _thumbnailFile,
                         ),
                       ],
                     ),
@@ -556,13 +632,26 @@ class _MediaStep extends StatelessWidget {
   const _MediaStep({
     required this.scheduleDetails,
     required this.onScheduleDetails,
+    required this.thumbnailFile,
+    required this.galleryFiles,
+    required this.onPickThumbnail,
+    required this.onClearThumbnail,
+    required this.onAddGalleryPhotos,
+    required this.onRemoveGalleryPhoto,
   });
 
   final String scheduleDetails;
   final ValueChanged<String> onScheduleDetails;
+  final XFile? thumbnailFile;
+  final List<XFile> galleryFiles;
+  final VoidCallback onPickThumbnail;
+  final VoidCallback onClearThumbnail;
+  final VoidCallback onAddGalleryPhotos;
+  final void Function(int index) onRemoveGalleryPhoto;
 
   @override
   Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -573,9 +662,100 @@ class _MediaStep extends StatelessWidget {
           maxLines: 5,
           onChanged: onScheduleDetails,
         ),
-        const SizedBox(height: 12),
+        const SizedBox(height: 20),
+        Text('Thumbnail', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            OutlinedButton.icon(
+              onPressed: onPickThumbnail,
+              icon: const Icon(Icons.image_outlined),
+              label: const Text('Choose cover image'),
+            ),
+            if (thumbnailFile != null) ...[
+              const SizedBox(width: 12),
+              TextButton(onPressed: onClearThumbnail, child: const Text('Remove')),
+            ],
+          ],
+        ),
+        if (thumbnailFile != null) ...[
+          const SizedBox(height: 8),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: FutureBuilder(
+              future: thumbnailFile!.readAsBytes(),
+              builder: (context, snap) {
+                if (!snap.hasData) {
+                  return const SizedBox(height: 120, child: Center(child: CircularProgressIndicator()));
+                }
+                return Image.memory(
+                  snap.data!,
+                  height: 120,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                );
+              },
+            ),
+          ),
+        ],
+        const SizedBox(height: 20),
+        Text('Gallery (${galleryFiles.length}/8)', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            OutlinedButton.icon(
+              onPressed: galleryFiles.length >= 8 ? null : onAddGalleryPhotos,
+              icon: const Icon(Icons.photo_library_outlined),
+              label: const Text('Add photos'),
+            ),
+            for (var i = 0; i < galleryFiles.length; i++)
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: FutureBuilder(
+                      future: galleryFiles[i].readAsBytes(),
+                      builder: (context, snap) {
+                        if (!snap.hasData) {
+                          return Container(
+                            width: 72,
+                            height: 72,
+                            color: scheme.surfaceContainerHighest,
+                            alignment: Alignment.center,
+                            child: const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            ),
+                          );
+                        }
+                        return Image.memory(snap.data!, width: 72, height: 72, fit: BoxFit.cover);
+                      },
+                    ),
+                  ),
+                  Positioned(
+                    top: -6,
+                    right: -6,
+                    child: IconButton.filled(
+                      style: IconButton.styleFrom(
+                        minimumSize: const Size(28, 28),
+                        padding: EdgeInsets.zero,
+                      ),
+                      onPressed: () => onRemoveGalleryPhoto(i),
+                      icon: const Icon(Icons.close, size: 16),
+                    ),
+                  ),
+                ],
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
         Text(
-          'Media upload (photos/video) will be added next.',
+          'Cover image appears in search; gallery photos show on the listing page.',
           style: Theme.of(context).textTheme.bodySmall,
         ),
       ],
@@ -627,11 +807,13 @@ class _PreviewCard extends StatelessWidget {
     required this.category,
     required this.title,
     required this.scheduleDetails,
+    this.thumbnailFile,
   });
 
   final String? category;
   final String title;
   final String scheduleDetails;
+  final XFile? thumbnailFile;
 
   @override
   Widget build(BuildContext context) {
@@ -645,7 +827,17 @@ class _PreviewCard extends StatelessWidget {
           Container(
             height: 160,
             color: scheme.surfaceContainerHighest,
-            child: Stack(
+            child: thumbnailFile != null
+                ? FutureBuilder(
+                    future: thumbnailFile!.readAsBytes(),
+                    builder: (context, snap) {
+                      if (!snap.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      return Image.memory(snap.data!, fit: BoxFit.cover, width: double.infinity, height: 160);
+                    },
+                  )
+                : Stack(
               children: [
                 const Center(child: Icon(Icons.photo, size: 48)),
                 Positioned(
@@ -712,6 +904,23 @@ class _PreviewCard extends StatelessWidget {
       ),
     );
   }
+}
+
+String _imageExt(String name) {
+  final n = name.toLowerCase();
+  if (n.endsWith('.png')) return '.png';
+  if (n.endsWith('.webp')) return '.webp';
+  if (n.endsWith('.gif')) return '.gif';
+  return '.jpg';
+}
+
+String _imageContentType(String ext) {
+  return switch (ext) {
+    '.png' => 'image/png',
+    '.webp' => 'image/webp',
+    '.gif' => 'image/gif',
+    _ => 'image/jpeg',
+  };
 }
 
 String _shortLabel(String name) {
